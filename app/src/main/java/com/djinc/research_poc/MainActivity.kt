@@ -2,7 +2,12 @@ package com.djinc.research_poc
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.CaptureRequest
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -18,12 +23,16 @@ import androidx.camera.core.Preview
 import androidx.camera.core.CameraSelector
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.annotation.RequiresApi
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.Camera
 import androidx.camera.core.ImageCaptureException
 import androidx.core.view.WindowCompat
 import com.djinc.research_poc.databinding.ActivityMainBinding
+import java.lang.Integer.parseInt
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -31,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var viewBinding: ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
+    private lateinit var camera: Camera
     private var imageCapture: ImageCapture? = null
     private var cameraInfo: Camera2CameraInfo? = null
     private var cameraControl: Camera2CameraControl? = null
@@ -51,6 +61,10 @@ class MainActivity : AppCompatActivity() {
 
         // Set up the listener for taking a photo
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
+
+        // Set slider listeners
+        viewBinding.imageExposureUpButton.setOnClickListener { setEffect(EFFECT.EXPOSURE, 1) }
+        viewBinding.imageExposureDownButton.setOnClickListener { setEffect(EFFECT.EXPOSURE, 0) }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -128,16 +142,55 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider.unbindAll()
 
                 // Bind use cases to camera
-                val camera = cameraProvider.bindToLifecycle(
+                camera = cameraProvider.bindToLifecycle(
                     this, cameraSelector, preview, imageCapture
                 )
-                cameraInfo = Camera2CameraInfo.from(camera.cameraInfo)
-                cameraControl = Camera2CameraControl.from(camera.cameraControl)
+                camera.let {
+                    cameraInfo = Camera2CameraInfo.from(it.cameraInfo)
+                    cameraControl = Camera2CameraControl.from(it.cameraControl)
+                }
             } catch (exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
             }
 
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun setEffect(effect: EFFECT, value: Int) {
+        val cameraInfo = cameraInfo ?: return
+        val cameraControl = cameraControl ?: return
+
+        val options = CaptureRequestOptions.Builder().apply {
+            // Disable scene mode to customize camera options
+            setCaptureRequestOption(
+                CaptureRequest.CONTROL_SCENE_MODE,
+                CameraMetadata.CONTROL_SCENE_MODE_DISABLED
+            )
+            when (effect) {
+                EFFECT.EXPOSURE -> {
+                    if (!camera.cameraInfo.exposureState.isExposureCompensationSupported) return
+
+                    val currentIndex = camera.cameraInfo.exposureState.exposureCompensationIndex
+                    val range = camera.cameraInfo.exposureState.exposureCompensationRange
+                    Log.d(TAG, "$currentIndex")
+                    Log.d(TAG, "$range")
+                    val newIndex = if (value > 0) currentIndex + 1 else currentIndex - 1
+                    if (newIndex in range) camera.cameraControl.setExposureCompensationIndex(
+                        newIndex
+                    )
+                }
+                EFFECT.WHITEBALANCE -> {
+
+                }
+                EFFECT.ZOOM -> {
+
+                }
+            }
+        }.build()
+
+        cameraControl.addCaptureRequestOptions(options)
+            .addListener({}, ContextCompat.getMainExecutor(this))
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
@@ -183,5 +236,11 @@ class MainActivity : AppCompatActivity() {
                     add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             }.toTypedArray()
+    }
+
+    enum class EFFECT {
+        EXPOSURE,
+        WHITEBALANCE,
+        ZOOM,
     }
 }
