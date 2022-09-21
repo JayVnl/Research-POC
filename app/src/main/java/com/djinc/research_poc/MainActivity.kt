@@ -2,39 +2,36 @@ package com.djinc.research_poc
 
 import android.Manifest
 import android.content.ContentValues
-import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.ImageCapture
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import android.widget.Toast
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.core.Preview
-import androidx.camera.core.CameraSelector
 import android.util.Log
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
+import android.widget.Toast
 import androidx.annotation.OptIn
-import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
-import androidx.camera.core.Camera
-import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.djinc.research_poc.databinding.ActivityMainBinding
-import java.lang.Integer.parseInt
 import java.text.SimpleDateFormat
-import java.util.Locale
+import java.util.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import kotlin.math.sqrt
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -168,6 +165,22 @@ class MainActivity : AppCompatActivity() {
                     cameraInfo = Camera2CameraInfo.from(it.cameraInfo)
                     cameraControl = Camera2CameraControl.from(it.cameraControl)
                 }
+
+                val scaleGestureDetector = ScaleGestureDetector(this,
+                    object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                        override fun onScale(detector: ScaleGestureDetector): Boolean {
+                            val scale =
+                                camera.cameraInfo.zoomState.value!!.zoomRatio * detector.scaleFactor
+                            camera.cameraControl.setZoomRatio(scale)
+                            return true
+                        }
+                    })
+
+                viewBinding.viewFinder.setOnTouchListener { view, event ->
+                    view.performClick()
+                    scaleGestureDetector.onTouchEvent(event)
+                    return@setOnTouchListener true
+                }
             } catch (exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
             }
@@ -210,9 +223,6 @@ class MainActivity : AppCompatActivity() {
                         newWhiteBalanceMode.value
                     )
                     viewBinding.activeWhiteBalance.text = newWhiteBalanceMode.name
-                }
-                EFFECT.ZOOM -> {
-                    
                 }
             }
         }.build()
@@ -269,6 +279,5 @@ class MainActivity : AppCompatActivity() {
     enum class EFFECT {
         EXPOSURE,
         WHITEBALANCE,
-        ZOOM,
     }
 }
