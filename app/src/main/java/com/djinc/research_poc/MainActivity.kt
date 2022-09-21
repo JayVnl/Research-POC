@@ -45,6 +45,20 @@ class MainActivity : AppCompatActivity() {
     private var cameraInfo: Camera2CameraInfo? = null
     private var cameraControl: Camera2CameraControl? = null
 
+    data class WhiteBalanceMode(val name: String, val value: Int)
+
+    private var whiteBalanceModes = listOf(
+        WhiteBalanceMode("Auto", CaptureRequest.CONTROL_AWB_MODE_AUTO),
+        WhiteBalanceMode("Incandescent", CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT),
+        WhiteBalanceMode("Fluorescent", CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT),
+        WhiteBalanceMode("Warm fluorescent", CaptureRequest.CONTROL_AWB_MODE_WARM_FLUORESCENT),
+        WhiteBalanceMode("Daylight", CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT),
+        WhiteBalanceMode("Cloudy daylight", CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT),
+        WhiteBalanceMode("Twilight", CaptureRequest.CONTROL_AWB_MODE_TWILIGHT),
+        WhiteBalanceMode("Shade", CaptureRequest.CONTROL_AWB_MODE_SHADE),
+    )
+    private var activeWhiteBalanceIndex = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
@@ -59,12 +73,17 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+        viewBinding.activeWhiteBalance.text = whiteBalanceModes[activeWhiteBalanceIndex].name
+
         // Set up the listener for taking a photo
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
 
         // Set slider listeners
-        viewBinding.imageExposureUpButton.setOnClickListener { setEffect(EFFECT.EXPOSURE, 1) }
-        viewBinding.imageExposureDownButton.setOnClickListener { setEffect(EFFECT.EXPOSURE, 0) }
+        viewBinding.exposureUpButton.setOnClickListener { setEffect(EFFECT.EXPOSURE, 1) }
+        viewBinding.exposureDownButton.setOnClickListener { setEffect(EFFECT.EXPOSURE, 0) }
+
+        viewBinding.whiteBalanceUpButton.setOnClickListener { setEffect(EFFECT.WHITEBALANCE, 1) }
+        viewBinding.whiteBalanceDownButton.setOnClickListener { setEffect(EFFECT.WHITEBALANCE, 0) }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -173,18 +192,27 @@ class MainActivity : AppCompatActivity() {
 
                     val currentIndex = camera.cameraInfo.exposureState.exposureCompensationIndex
                     val range = camera.cameraInfo.exposureState.exposureCompensationRange
-                    Log.d(TAG, "$currentIndex")
-                    Log.d(TAG, "$range")
                     val newIndex = if (value > 0) currentIndex + 1 else currentIndex - 1
+
                     if (newIndex in range) camera.cameraControl.setExposureCompensationIndex(
                         newIndex
                     )
                 }
                 EFFECT.WHITEBALANCE -> {
-
+                    var newIndex =
+                        if (value > 0) activeWhiteBalanceIndex + 1 else activeWhiteBalanceIndex - 1
+                    if (newIndex > whiteBalanceModes.lastIndex) newIndex = 0
+                    if (newIndex < 0) newIndex = whiteBalanceModes.lastIndex
+                    val newWhiteBalanceMode = whiteBalanceModes[newIndex]
+                    activeWhiteBalanceIndex = newIndex
+                    setCaptureRequestOption(
+                        CaptureRequest.CONTROL_AWB_MODE,
+                        newWhiteBalanceMode.value
+                    )
+                    viewBinding.activeWhiteBalance.text = newWhiteBalanceMode.name
                 }
                 EFFECT.ZOOM -> {
-
+                    
                 }
             }
         }.build()

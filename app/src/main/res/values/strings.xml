@@ -4,6 +4,9 @@
     <string name="start_capture">Start Capture</string>
     <string name="stop_capture">Stop Capture</string>
     <string name="exposure">EXPOSURE</string>
-    <string name="up_exposure">+</string>
-    <string name="down_exposure">-</string>
+    <string name="plus">+</string>
+    <string name="minus">-</string>
+    <string name="white_balance">WHITE BALANCE</string>
+    <string name="previous"><![CDATA[<]]></string>
+    <string name="next"><![CDATA[>]]></string>
 </resources>
