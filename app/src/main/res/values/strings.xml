@@ -9,4 +9,13 @@
     <string name="white_balance">WHITE BALANCE</string>
     <string name="previous"><![CDATA[<]]></string>
     <string name="next"><![CDATA[>]]></string>
+    <string name="chromatic_mode">Chromatic</string>
+    <string name="distortion_mode">Distortion</string>
+    <string name="edge_mode">Edge</string>
+    <string name="hot_pixel_mode">Hot pixel</string>
+    <string name="jpeg_quality_mode">JPEG Quality</string>
+    <string name="stabilisation_mode">Stabilisation</string>
+    <string name="noise_mode">Noise</string>
+    <string name="tone_mapping_mode">Tone mapping</string>
+    <string name="down">v</string>
 </resources>
