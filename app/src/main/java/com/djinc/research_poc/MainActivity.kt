@@ -33,6 +33,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -66,6 +67,8 @@ class MainActivity : AppCompatActivity() {
     private var stabilisationMode = false
     private var noiseMode = false
     private var toneMappingMode = false
+
+    private var timings: MutableList<Long> = mutableListOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,7 +119,8 @@ class MainActivity : AppCompatActivity() {
         // Get a stable reference of the modifiable image capture use case
         val imageCapture = imageCapture ?: return
 
-        Log.d(TAG, "Capturing photo")
+        val startTime = System.nanoTime()
+//        Log.d(TAG, "Capturing photo")
 
         // Create time stamped name and MediaStore entry.
         val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
@@ -153,9 +157,17 @@ class MainActivity : AppCompatActivity() {
 
                 override fun
                         onImageSaved(output: ImageCapture.OutputFileResults) {
+                    val endTime = System.nanoTime()
                     val msg = "Photo capture succeeded: ${output.savedUri}"
                     Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
+//                    Log.d(TAG, msg)
+                    val timing =
+                        TimeUnit.MILLISECONDS.convert(endTime - startTime, TimeUnit.NANOSECONDS)
+                    timings.add(timing)
+                    Log.d(TAG, "$timing ms ${timings.size}")
+                    if (timings.size == 10) {
+                        Log.d(TAG, "Average: ${timings.average()} ms")
+                    }
                 }
             }
         )
