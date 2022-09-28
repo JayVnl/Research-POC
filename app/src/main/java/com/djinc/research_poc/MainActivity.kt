@@ -4,20 +4,25 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.hardware.camera2.*
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraMetadata
+import android.hardware.camera2.CaptureRequest
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.view.View.VISIBLE
-import android.view.View.GONE
 import android.provider.MediaStore
 import android.util.Log
 import android.view.ScaleGestureDetector
+import android.view.View.GONE
+import android.view.View.VISIBLE
 import android.widget.Button
 import android.widget.Toast
 import androidx.annotation.OptIn
@@ -33,6 +38,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import com.djinc.research_poc.databinding.ActivityMainBinding
+import java.io.File
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
@@ -75,7 +82,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var timings: MutableList<Long> = mutableListOf()
 
     private lateinit var sensorManager: SensorManager
-    private var lightSensor: Sensor? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,10 +98,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val deviceSensors: List<Sensor> = sensorManager.getSensorList(Sensor.TYPE_ALL)
-        deviceSensors.forEach { sensor ->
-            Log.d(TAG, "${sensor.name}")
-        }
+//        val deviceSensors: List<Sensor> = sensorManager.getSensorList(Sensor.TYPE_ALL)
+//        deviceSensors.forEach { sensor ->
+//            Log.d(TAG, "${sensor}")
+//        }
 
         viewBinding.activeWhiteBalance.text = whiteBalanceModes[activeWhiteBalanceIndex].name
 
@@ -133,47 +139,63 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val imageCapture = imageCapture ?: return
 
         val startTime = System.nanoTime()
-//        Log.d(TAG, "Capturing photo")
 
         // Create time stamped name and MediaStore entry.
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-            .format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "pictures/GrowCollect"
-                )
-            }
-        }
 
         // Create output options object which contains file + metadata
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(
-                contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-            .build()
+//        val outputOptions = ImageCapture.OutputFileOptions
+//            .Builder(
+//                contentResolver,
+//                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+//                contentValues
+//            )
+//            .build()
 
         // Set up image capture listener, which is triggered after photo has
         // been taken
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
+        imageCapture.takePicture(ContextCompat.getMainExecutor(this),
+            object :
+                ImageCapture.OnImageCapturedCallback() {
                 override fun onError(exc: ImageCaptureException) {
                     Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
                 }
 
-                override fun
-                        onImageSaved(output: ImageCapture.OutputFileResults) {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    super.onCaptureSuccess(image)
+
+                    val bitmap = imageProxyToBitmap(image)
+                    val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
+                        .format(System.currentTimeMillis()) + ".jpeg"
+                    val contentValues = ContentValues()
+                    contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        contentValues.put(
+                            MediaStore.MediaColumns.RELATIVE_PATH,
+                            Environment.DIRECTORY_DCIM + "/GrowCollect"
+                        )
+                    } else {
+                        val directory =
+                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+                                .toString() + "/GrowCollect"
+                        val dir = File(directory);
+                        if (!dir.exists()) {
+                            dir.mkdir()
+                        }
+                        val file = File(directory, name)
+                        contentValues.put(MediaStore.MediaColumns.DATA, file.absolutePath)
+                    }
+                    val uri: Uri? =
+                        contentResolver.insert(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            contentValues
+                        )
+                    contentResolver.openOutputStream(uri!!).use { output ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, output)
+                    }
                     val endTime = System.nanoTime()
-                    val msg = "Photo capture succeeded: ${output.savedUri}"
+                    val msg = "Photo capture succeeded: $uri"
                     Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-//                    Log.d(TAG, msg)
                     val timing =
                         TimeUnit.MILLISECONDS.convert(endTime - startTime, TimeUnit.NANOSECONDS)
                     timings.add(timing)
@@ -181,9 +203,41 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     if (timings.size == 10) {
                         Log.d(TAG, "Average: ${timings.average()} ms")
                     }
+                    image.close()
                 }
-            }
-        )
+            })
+
+//        imageCapture.takePicture(
+//            outputOptions,
+//            ContextCompat.getMainExecutor(this),
+//            object : ImageCapture.OnImageSavedCallback {
+//                override fun onError(exc: ImageCaptureException) {
+//                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+//                }
+//
+//                override fun
+//                        onImageSaved(output: ImageCapture.OutputFileResults) {
+//                    val endTime = System.nanoTime()
+//                    val msg = "Photo capture succeeded: ${output.savedUri}"
+//                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
+//                    val timing =
+//                        TimeUnit.MILLISECONDS.convert(endTime - startTime, TimeUnit.NANOSECONDS)
+//                    timings.add(timing)
+//                    Log.d(TAG, "$timing ms ${timings.size}")
+//                    if (timings.size == 10) {
+//                        Log.d(TAG, "Average: ${timings.average()} ms")
+//                    }
+//                }
+//            }
+//        )
+    }
+
+    private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
+        val planeProxy = image.planes[0]
+        val buffer: ByteBuffer = planeProxy.buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
     @OptIn(ExperimentalCamera2Interop::class)
@@ -441,14 +495,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-    }
-
-    override fun onPause() {
-        super.onPause()
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
@@ -459,9 +505,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     /*
      * Listen to change events from each sensor
      */
-    override fun onSensorChanged(event: SensorEvent) {
-
-    }
+    override fun onSensorChanged(event: SensorEvent) {}
 
     companion object {
         private const val TAG = "ResearchPOC"
